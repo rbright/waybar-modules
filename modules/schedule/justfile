@@ -1,0 +1,22 @@
+set shell := ["bash", "-euo", "pipefail", "-c"]
+
+default:
+    @just --list
+
+fmt:
+    gofmt -w $(find . -name '*.go' -type f)
+
+fmt-check:
+    test -z "$(gofmt -l $(find . -name '*.go' -type f))"
+
+test:
+    go test ./...
+
+lint:
+    golangci-lint run ./...
+
+build:
+    tmpdir="$(mktemp -d)"; trap 'rm -rf "$tmpdir"' EXIT; go build -o "$tmpdir/waybar-schedule" ./cmd/waybar-schedule
+
+nix-build:
+    nix build --no-link 'path:../..#schedule'

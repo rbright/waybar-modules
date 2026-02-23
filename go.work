@@ -1,0 +1,9 @@
+go 1.25.5
+
+use (
+	./modules/agent-usage
+	./modules/github
+	./modules/linear
+	./modules/schedule
+	./modules/sotto
+)

@@ -1,0 +1,8 @@
+mod agent-usage
+mod github
+mod linear
+mod schedule
+mod sotto
+
+default:
+    @just --list --list-submodules

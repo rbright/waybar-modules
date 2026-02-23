@@ -1,0 +1,20 @@
+# Build artifacts
+/bin/
+/dist/
+**/*.test
+**/*.out
+coverage.out
+
+# Nix artifacts
+/result
+/result-*
+/results/
+
+# Editor/system
+.DS_Store
+.vscode/
+.idea/
+.direnv/
+
+# Local agent/runtime notes
+.pi/
