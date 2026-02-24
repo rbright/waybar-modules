@@ -24,10 +24,7 @@ go build ./cmd/waybar-sotto
 waybar-sotto <status|refresh|select-item N|select-input>
 ```
 
-`select-input` opens a compact dmenu-style selector and prefers:
+`select-input` opens a compact `fuzzel` dmenu selector.
 
-1. `fuzzel`
-2. `wofi`
-3. `bemenu`
-4. `rofi`
+It uses `hyprctl` cursor/monitor geometry to place the selector near the click/pointer location on the same monitor.
 

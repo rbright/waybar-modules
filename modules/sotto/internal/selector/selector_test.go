@@ -54,3 +54,33 @@ func TestResolveSelectionRejectsUnknownValue(t *testing.T) {
 		t.Fatalf("expected unresolved selection, got id %q", id)
 	}
 }
+
+func TestPlacementFromCursor(t *testing.T) {
+	cursor := cursorPosition{X: 1502, Y: 20}
+	monitors := []monitorGeometry{
+		{Name: "DP-5", X: 0, Y: 0, Width: 3840, Height: 2160},
+	}
+
+	placement, ok := placementFromCursor(cursor, monitors)
+	if !ok {
+		t.Fatal("expected cursor placement to resolve")
+	}
+	if placement.Output != "DP-5" {
+		t.Fatalf("expected output DP-5, got %q", placement.Output)
+	}
+	if placement.XMargin != 1478 {
+		t.Fatalf("expected x margin 1478, got %d", placement.XMargin)
+	}
+	if placement.YMargin != 28 {
+		t.Fatalf("expected y margin 28, got %d", placement.YMargin)
+	}
+}
+
+func TestPlacementFromCursorOutsideKnownMonitors(t *testing.T) {
+	cursor := cursorPosition{X: 99999, Y: 99999}
+	monitors := []monitorGeometry{{Name: "DP-5", X: 0, Y: 0, Width: 3840, Height: 2160}}
+
+	if _, ok := placementFromCursor(cursor, monitors); ok {
+		t.Fatal("expected placement lookup to fail for cursor outside monitors")
+	}
+}

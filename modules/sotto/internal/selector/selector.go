@@ -2,8 +2,10 @@ package selector
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"os"
 	"os/exec"
 	"strconv"
@@ -18,6 +20,25 @@ type menuOption struct {
 	Index int
 	ID    string
 	Line  string
+}
+
+type cursorPosition struct {
+	X float64 `json:"x"`
+	Y float64 `json:"y"`
+}
+
+type monitorGeometry struct {
+	Name   string `json:"name"`
+	X      int    `json:"x"`
+	Y      int    `json:"y"`
+	Width  int    `json:"width"`
+	Height int    `json:"height"`
+}
+
+type pointerPlacement struct {
+	Output  string
+	XMargin int
+	YMargin int
 }
 
 func SelectInput(ctx context.Context, devices []audio.Device, currentID string) (string, error) {
@@ -110,39 +131,104 @@ func runSelector(ctx context.Context, options []menuOption) (string, error) {
 		linesCount = 1
 	}
 
-	candidates := []struct {
-		command string
-		args    []string
-	}{
-		{command: "fuzzel", args: []string{"--dmenu", "--prompt", "Mic> ", "--lines", strconv.Itoa(linesCount)}},
-		{command: "wofi", args: []string{"--dmenu", "--prompt", "Mic", "--lines", strconv.Itoa(linesCount)}},
-		{command: "bemenu", args: []string{"-p", "Mic>"}},
-		{command: "rofi", args: []string{"-dmenu", "-i", "-p", "Mic", "-lines", strconv.Itoa(linesCount)}},
+	if _, err := exec.LookPath("fuzzel"); err != nil {
+		return "", fmt.Errorf("fuzzel is required for anchored input selection")
 	}
 
-	var lastErr error
-	for _, candidate := range candidates {
-		if _, err := exec.LookPath(candidate.command); err != nil {
+	fuzzelArgs, err := buildFuzzelArgs(ctx, linesCount)
+	if err != nil {
+		return "", err
+	}
+
+	return runMenuCommand(ctx, "fuzzel", fuzzelArgs, input)
+}
+
+func buildFuzzelArgs(ctx context.Context, linesCount int) ([]string, error) {
+	args := []string{
+		"--dmenu",
+		"--prompt", "Mic> ",
+		"--lines", strconv.Itoa(linesCount),
+		"--layer", "overlay",
+	}
+
+	placement, err := detectPointerPlacement(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("unable to anchor selector near pointer: %w", err)
+	}
+
+	args = append(args,
+		"--output", placement.Output,
+		"--anchor", "top-left",
+		"--x-margin", strconv.Itoa(placement.XMargin),
+		"--y-margin", strconv.Itoa(placement.YMargin),
+	)
+
+	return args, nil
+}
+
+func detectPointerPlacement(ctx context.Context) (pointerPlacement, error) {
+	if _, err := exec.LookPath("hyprctl"); err != nil {
+		return pointerPlacement{}, fmt.Errorf("hyprctl not available")
+	}
+
+	cursorRaw, err := exec.CommandContext(ctx, "hyprctl", "-j", "cursorpos").Output()
+	if err != nil {
+		return pointerPlacement{}, fmt.Errorf("read cursor position: %w", err)
+	}
+
+	var cursor cursorPosition
+	if err := json.Unmarshal(cursorRaw, &cursor); err != nil {
+		return pointerPlacement{}, fmt.Errorf("decode cursor position: %w", err)
+	}
+
+	monitorsRaw, err := exec.CommandContext(ctx, "hyprctl", "-j", "monitors").Output()
+	if err != nil {
+		return pointerPlacement{}, fmt.Errorf("read monitors: %w", err)
+	}
+
+	var monitors []monitorGeometry
+	if err := json.Unmarshal(monitorsRaw, &monitors); err != nil {
+		return pointerPlacement{}, fmt.Errorf("decode monitors: %w", err)
+	}
+
+	placement, ok := placementFromCursor(cursor, monitors)
+	if !ok {
+		return pointerPlacement{}, fmt.Errorf("cursor monitor not found")
+	}
+
+	return placement, nil
+}
+
+func placementFromCursor(cursor cursorPosition, monitors []monitorGeometry) (pointerPlacement, bool) {
+	cursorX := int(math.Round(cursor.X))
+	cursorY := int(math.Round(cursor.Y))
+
+	for _, monitor := range monitors {
+		if strings.TrimSpace(monitor.Name) == "" {
+			continue
+		}
+		if monitor.Width <= 0 || monitor.Height <= 0 {
 			continue
 		}
 
-		selection, err := runMenuCommand(ctx, candidate.command, candidate.args, input)
-		if err != nil {
-			if errors.Is(err, ErrSelectionCancelled) {
-				return "", err
-			}
-			lastErr = err
+		inside := cursorX >= monitor.X && cursorX < monitor.X+monitor.Width &&
+			cursorY >= monitor.Y && cursorY < monitor.Y+monitor.Height
+		if !inside {
 			continue
 		}
 
-		return selection, nil
+		localX := cursorX - monitor.X
+		localY := cursorY - monitor.Y
+
+		placement := pointerPlacement{
+			Output:  monitor.Name,
+			XMargin: clampInt(localX-24, 0, monitor.Width-20),
+			YMargin: clampInt(localY+8, 0, monitor.Height-20),
+		}
+		return placement, true
 	}
 
-	if lastErr != nil {
-		return "", lastErr
-	}
-
-	return "", fmt.Errorf("no supported selector found (install fuzzel, wofi, bemenu, or rofi)")
+	return pointerPlacement{}, false
 }
 
 func runMenuCommand(ctx context.Context, command string, args []string, input string) (string, error) {
@@ -198,4 +284,17 @@ func minInt(a, b int) int {
 		return a
 	}
 	return b
+}
+
+func clampInt(value, minValue, maxValue int) int {
+	if maxValue < minValue {
+		maxValue = minValue
+	}
+	if value < minValue {
+		return minValue
+	}
+	if value > maxValue {
+		return maxValue
+	}
+	return value
 }
