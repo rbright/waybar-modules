@@ -21,5 +21,5 @@ go build ./cmd/waybar-sotto
 ## Usage
 
 ```bash
-waybar-sotto <status|refresh|select-item N>
+waybar-sotto <status|refresh|select-item N|select-input>
 ```

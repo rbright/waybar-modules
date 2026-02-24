@@ -9,6 +9,7 @@ import (
 
 	"github.com/rbright/waybar-sotto/internal/audio"
 	"github.com/rbright/waybar-sotto/internal/config"
+	"github.com/rbright/waybar-sotto/internal/selector"
 	"github.com/rbright/waybar-sotto/internal/sotto"
 	"github.com/rbright/waybar-sotto/internal/state"
 	"github.com/rbright/waybar-sotto/internal/waybar"
@@ -32,6 +33,8 @@ func Run(ctx context.Context, args []string, cfg config.Runtime, stdout io.Write
 		return err
 	case "select-item":
 		return selectItem(ctx, cfg, index)
+	case "select-input":
+		return selectInput(ctx, cfg)
 	default:
 		return fmt.Errorf("unsupported command %q", cmd)
 	}
@@ -43,7 +46,7 @@ func parseArgs(args []string) (command string, index int, err error) {
 	}
 
 	switch strings.TrimSpace(args[0]) {
-	case "status", "refresh":
+	case "status", "refresh", "select-input":
 		if len(args) > 1 {
 			return "", 0, fmt.Errorf("unexpected argument %q", args[1])
 		}
@@ -58,7 +61,7 @@ func parseArgs(args []string) (command string, index int, err error) {
 		}
 		return "select-item", n, nil
 	default:
-		return "", 0, fmt.Errorf("usage: waybar-sotto <status|refresh|select-item N>")
+		return "", 0, fmt.Errorf("usage: waybar-sotto <status|refresh|select-item N|select-input>")
 	}
 }
 
@@ -169,6 +172,50 @@ func selectItem(ctx context.Context, cfg config.Runtime, index int) error {
 	}
 
 	if err := sotto.SetAudioInput(cfg.SottoConfigFile, item.ID); err != nil {
+		return err
+	}
+
+	_, err = buildStatus(ctx, cfg)
+	return err
+}
+
+func selectInput(ctx context.Context, cfg config.Runtime) error {
+	devices, err := audio.ListDevices(ctx)
+	if err != nil {
+		return err
+	}
+
+	activeDevices := audio.FilterActiveInputDevices(devices)
+	if len(activeDevices) == 0 {
+		return nil
+	}
+
+	selection, selectionErr := sotto.ReadAudioSelection(cfg.SottoConfigFile)
+	if selectionErr != nil {
+		selection = sotto.AudioSelection{Input: "default", Fallback: "default"}
+	}
+	configuredInput := strings.TrimSpace(selection.Input)
+	if configuredInput == "" {
+		configuredInput = "default"
+	}
+
+	preselectedID := ""
+	if matchedDevice, matched := audio.MatchConfiguredDevice(devices, configuredInput); matched {
+		preselectedID = strings.TrimSpace(matchedDevice.ID)
+	}
+
+	selectedID, err := selector.SelectInput(ctx, activeDevices, preselectedID)
+	if err != nil {
+		if err == selector.ErrSelectionCancelled {
+			return nil
+		}
+		return err
+	}
+	if strings.TrimSpace(selectedID) == "" {
+		return nil
+	}
+
+	if err := sotto.SetAudioInput(cfg.SottoConfigFile, selectedID); err != nil {
 		return err
 	}
 

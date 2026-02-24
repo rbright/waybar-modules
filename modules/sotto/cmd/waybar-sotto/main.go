@@ -41,5 +41,5 @@ func main() {
 }
 
 func printUsage() {
-	fmt.Println("waybar-sotto <status|refresh|select-item N>")
+	fmt.Println("waybar-sotto <status|refresh|select-item N|select-input>")
 }
