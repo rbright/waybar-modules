@@ -23,3 +23,11 @@ go build ./cmd/waybar-sotto
 ```bash
 waybar-sotto <status|refresh|select-item N|select-input>
 ```
+
+`select-input` opens a compact dmenu-style selector and prefers:
+
+1. `fuzzel`
+2. `wofi`
+3. `bemenu`
+4. `rofi`
+

@@ -1,49 +1,56 @@
 package selector
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/rbright/waybar-sotto/internal/audio"
 )
 
-func TestParseSelectionOutput(t *testing.T) {
-	tests := []struct {
-		name string
-		raw  string
-		want string
-	}{
-		{name: "empty", raw: "", want: ""},
-		{name: "newline separated", raw: "alsa_input.wave3\n", want: "alsa_input.wave3"},
-		{name: "pipe separated", raw: "alsa_input.wave3|ignored", want: "alsa_input.wave3"},
-		{name: "trimmed", raw: "  alsa_input.wave3  ", want: "alsa_input.wave3"},
+func TestBuildMenuOptions(t *testing.T) {
+	devices := []audio.Device{
+		{ID: "alsa_input.wave3", Description: "Elgato Wave 3", Default: true},
+		{ID: "bluez_input.headset", Description: "Sony WH-1000XM6", Muted: true},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := parseSelectionOutput(tt.raw); got != tt.want {
-				t.Fatalf("parseSelectionOutput() = %q, want %q", got, tt.want)
-			}
-		})
+	options := buildMenuOptions(devices, "alsa_input.wave3")
+	if len(options) != 2 {
+		t.Fatalf("expected 2 options, got %d", len(options))
+	}
+
+	if options[0].ID != "alsa_input.wave3" {
+		t.Fatalf("unexpected first option ID: %q", options[0].ID)
+	}
+	if !strings.HasPrefix(options[0].Line, "01") {
+		t.Fatalf("expected indexed option line, got %q", options[0].Line)
+	}
+	if !strings.Contains(options[0].Line, "selected") {
+		t.Fatalf("expected selected marker in first option line, got %q", options[0].Line)
+	}
+	if !strings.Contains(options[1].Line, "muted") {
+		t.Fatalf("expected muted marker in second option line, got %q", options[1].Line)
 	}
 }
 
-func TestBuildStatusLabel(t *testing.T) {
-	tests := []struct {
-		name   string
-		device audio.Device
-		want   string
-	}{
-		{name: "active", device: audio.Device{}, want: "active"},
-		{name: "default", device: audio.Device{Default: true}, want: "default"},
-		{name: "muted", device: audio.Device{Muted: true}, want: "muted"},
-		{name: "default and muted", device: audio.Device{Default: true, Muted: true}, want: "default, muted"},
+func TestResolveSelectionByIndexPrefix(t *testing.T) {
+	options := []menuOption{
+		{Index: 1, ID: "input-a", Line: "01  Input A"},
+		{Index: 2, ID: "input-b", Line: "02  Input B"},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := buildStatusLabel(tt.device); got != tt.want {
-				t.Fatalf("buildStatusLabel() = %q, want %q", got, tt.want)
-			}
-		})
+	id, ok := resolveSelection("02  Input B", options)
+	if !ok {
+		t.Fatal("expected to resolve selection")
+	}
+	if id != "input-b" {
+		t.Fatalf("expected input-b, got %q", id)
+	}
+}
+
+func TestResolveSelectionRejectsUnknownValue(t *testing.T) {
+	options := []menuOption{{Index: 1, ID: "input-a", Line: "01  Input A"}}
+
+	if id, ok := resolveSelection("99  Missing", options); ok {
+		t.Fatalf("expected unresolved selection, got id %q", id)
 	}
 }
