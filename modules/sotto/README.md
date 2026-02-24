@@ -26,5 +26,5 @@ waybar-sotto <status|refresh|select-item N|select-input>
 
 `select-input` opens a compact `fuzzel` dmenu selector.
 
-It uses `hyprctl` cursor/monitor geometry to place the selector near the click/pointer location on the same monitor.
+It uses `hyprctl` cursor/monitor geometry to place the selector near the click/pointer location on the same monitor, and applies Catppuccin Mocha + IBM Plex Sans styling for desktop consistency.
 

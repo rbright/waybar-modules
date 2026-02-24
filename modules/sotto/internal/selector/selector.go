@@ -16,6 +16,12 @@ import (
 
 var ErrSelectionCancelled = errors.New("input selection cancelled")
 
+const (
+	fuzzelWidthChars       = 42
+	fuzzelEstimatedWidthPx = 420
+	fuzzelLineHeightPx     = 22
+)
+
 type menuOption struct {
 	Index int
 	ID    string
@@ -36,7 +42,15 @@ type monitorGeometry struct {
 }
 
 type pointerPlacement struct {
-	Output  string
+	Output        string
+	LocalX        int
+	LocalY        int
+	MonitorWidth  int
+	MonitorHeight int
+}
+
+type fuzzelPlacement struct {
+	Anchor  string
 	XMargin int
 	YMargin int
 }
@@ -144,24 +158,41 @@ func runSelector(ctx context.Context, options []menuOption) (string, error) {
 }
 
 func buildFuzzelArgs(ctx context.Context, linesCount int) ([]string, error) {
-	args := []string{
-		"--dmenu",
-		"--prompt", "Mic> ",
-		"--lines", strconv.Itoa(linesCount),
-		"--layer", "overlay",
-	}
-
-	placement, err := detectPointerPlacement(ctx)
+	pointer, err := detectPointerPlacement(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("unable to anchor selector near pointer: %w", err)
 	}
 
-	args = append(args,
-		"--output", placement.Output,
-		"--anchor", "top-left",
+	estimatedHeightPx := linesCount*fuzzelLineHeightPx + 64
+	placement := computeFuzzelPlacement(pointer, fuzzelEstimatedWidthPx, estimatedHeightPx)
+
+	args := []string{
+		"--dmenu",
+		"--layer", "overlay",
+		"--output", pointer.Output,
+		"--anchor", placement.Anchor,
 		"--x-margin", strconv.Itoa(placement.XMargin),
 		"--y-margin", strconv.Itoa(placement.YMargin),
-	)
+		"--prompt", "Mic> ",
+		"--lines", strconv.Itoa(linesCount),
+		"--width", strconv.Itoa(fuzzelWidthChars),
+		"--font", "IBM Plex Sans:size=12",
+		"--line-height", "20",
+		"--horizontal-pad", "12",
+		"--vertical-pad", "8",
+		"--inner-pad", "4",
+		"--background-color", "#1e1e2eff",
+		"--text-color", "#cdd6f4ff",
+		"--prompt-color", "#89b4faff",
+		"--input-color", "#cdd6f4ff",
+		"--match-color", "#89b4faff",
+		"--selection-color", "#313244ff",
+		"--selection-text-color", "#cdd6f4ff",
+		"--selection-match-color", "#89b4faff",
+		"--border-width", "2",
+		"--border-color", "#89b4faff",
+		"--border-radius", "8",
+	}
 
 	return args, nil
 }
@@ -221,14 +252,52 @@ func placementFromCursor(cursor cursorPosition, monitors []monitorGeometry) (poi
 		localY := cursorY - monitor.Y
 
 		placement := pointerPlacement{
-			Output:  monitor.Name,
-			XMargin: clampInt(localX-24, 0, monitor.Width-20),
-			YMargin: clampInt(localY+8, 0, monitor.Height-20),
+			Output:        monitor.Name,
+			LocalX:        localX,
+			LocalY:        localY,
+			MonitorWidth:  monitor.Width,
+			MonitorHeight: monitor.Height,
 		}
 		return placement, true
 	}
 
 	return pointerPlacement{}, false
+}
+
+func computeFuzzelPlacement(pointer pointerPlacement, estimatedWidthPx, estimatedHeightPx int) fuzzelPlacement {
+	horizontal := "left"
+	spaceRight := pointer.MonitorWidth - pointer.LocalX
+	if spaceRight < estimatedWidthPx && pointer.LocalX > pointer.MonitorWidth/2 {
+		horizontal = "right"
+	}
+
+	vertical := "top"
+	spaceBottom := pointer.MonitorHeight - pointer.LocalY
+	if spaceBottom < estimatedHeightPx && pointer.LocalY > pointer.MonitorHeight/2 {
+		vertical = "bottom"
+	}
+
+	anchor := fmt.Sprintf("%s-%s", vertical, horizontal)
+
+	xMargin := 0
+	if horizontal == "left" {
+		xMargin = clampInt(pointer.LocalX-18, 0, pointer.MonitorWidth-8)
+	} else {
+		xMargin = clampInt(pointer.MonitorWidth-pointer.LocalX-18, 0, pointer.MonitorWidth-8)
+	}
+
+	yMargin := 0
+	if vertical == "top" {
+		yMargin = clampInt(pointer.LocalY+6, 0, pointer.MonitorHeight-8)
+	} else {
+		yMargin = clampInt(pointer.MonitorHeight-pointer.LocalY+6, 0, pointer.MonitorHeight-8)
+	}
+
+	return fuzzelPlacement{
+		Anchor:  anchor,
+		XMargin: xMargin,
+		YMargin: yMargin,
+	}
 }
 
 func runMenuCommand(ctx context.Context, command string, args []string, input string) (string, error) {

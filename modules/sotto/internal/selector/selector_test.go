@@ -68,11 +68,11 @@ func TestPlacementFromCursor(t *testing.T) {
 	if placement.Output != "DP-5" {
 		t.Fatalf("expected output DP-5, got %q", placement.Output)
 	}
-	if placement.XMargin != 1478 {
-		t.Fatalf("expected x margin 1478, got %d", placement.XMargin)
+	if placement.LocalX != 1502 {
+		t.Fatalf("expected local x 1502, got %d", placement.LocalX)
 	}
-	if placement.YMargin != 28 {
-		t.Fatalf("expected y margin 28, got %d", placement.YMargin)
+	if placement.LocalY != 20 {
+		t.Fatalf("expected local y 20, got %d", placement.LocalY)
 	}
 }
 
@@ -82,5 +82,41 @@ func TestPlacementFromCursorOutsideKnownMonitors(t *testing.T) {
 
 	if _, ok := placementFromCursor(cursor, monitors); ok {
 		t.Fatal("expected placement lookup to fail for cursor outside monitors")
+	}
+}
+
+func TestComputeFuzzelPlacementAnchorsRightWhenNearEdge(t *testing.T) {
+	pointer := pointerPlacement{
+		Output:        "DP-5",
+		LocalX:        3800,
+		LocalY:        32,
+		MonitorWidth:  3840,
+		MonitorHeight: 2160,
+	}
+
+	placement := computeFuzzelPlacement(pointer, 420, 280)
+	if placement.Anchor != "top-right" {
+		t.Fatalf("expected top-right anchor, got %q", placement.Anchor)
+	}
+	if placement.XMargin <= 0 {
+		t.Fatalf("expected positive right margin, got %d", placement.XMargin)
+	}
+}
+
+func TestComputeFuzzelPlacementAnchorsBottomWhenNearBottomEdge(t *testing.T) {
+	pointer := pointerPlacement{
+		Output:        "DP-5",
+		LocalX:        600,
+		LocalY:        2100,
+		MonitorWidth:  3840,
+		MonitorHeight: 2160,
+	}
+
+	placement := computeFuzzelPlacement(pointer, 420, 320)
+	if placement.Anchor != "bottom-left" {
+		t.Fatalf("expected bottom-left anchor, got %q", placement.Anchor)
+	}
+	if placement.YMargin <= 0 {
+		t.Fatalf("expected positive bottom margin, got %d", placement.YMargin)
 	}
 }
