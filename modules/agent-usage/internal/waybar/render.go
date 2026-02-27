@@ -23,7 +23,7 @@ type IconConfig struct {
 func Render(metrics domain.Metrics, fetchedAt time.Time, icons IconConfig, staleError string) Output {
 	provider := metrics.Provider
 	icon := iconFor(provider, icons)
-	text := fmt.Sprintf("%s %s", icon, domain.FormatPercent(metrics.WeeklyRemaining))
+	text := fmt.Sprintf("%s  %s", domain.FormatPercent(metrics.WeeklyRemaining), icon)
 
 	classes := []string{string(provider), severityClass(metrics.WeeklyRemaining)}
 	if strings.TrimSpace(staleError) != "" {
